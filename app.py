@@ -1,11 +1,7 @@
 # ===================================================================
 # 🇲🇾 HR Pack Generator - BACKEND API (All-in-One)
 #
-# This single file contains:
-# 1. The Python "Generator Engine" (all the docx/pdf logic)
-# 2. The Flask "Web API" (that talks to your index.html)
-#
-# Deploy this file (and requirements.txt) to Render.
+# VERSION 2: Includes logo sanitization to fix large image errors.
 # ===================================================================
 
 import os
@@ -19,14 +15,53 @@ from docx.shared import Inches, Pt
 from docx.oxml import OxmlElement
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image
 from reportlab.lib.styles import getSampleStyleSheet
-from PIL import Image as PILImage
+from PIL import Image as PILImage # <-- Import PIL's Image
+
+# --- 1. Initialize the Flask App ---
+app = Flask(__name__)
+
+# --- 2. Enable CORS ---
+CORS(app)
+
+# --- 3. HELPER: Logo Sanitizer ---
+# This function fixes logos that are "too large" or have bad metadata
+def sanitize_logo(logo_upload_file, base_dir):
+    """
+    Opens, resizes, and saves the logo to a clean format.
+    Returns the path to the new, sanitized logo.
+    """
+    try:
+        # Save the uploaded file temporarily
+        temp_logo_path = os.path.join(base_dir, "temp_original_logo")
+        logo_upload_file.save(temp_logo_path)
+        
+        # Open with Pillow
+        image = PILImage.open(temp_logo_path)
+        
+        # Resize to a max width/height of 500px, keeping aspect ratio
+        image.thumbnail((500, 500))
+        
+        # Save as a new, clean PNG
+        sanitized_logo_path = os.path.join(base_dir, "logo_sanitized.png")
+        image.save(sanitized_logo_path, "PNG")
+        
+        # Clean up the original temp file
+        os.remove(temp_logo_path)
+        
+        return sanitized_logo_path
+        
+    except Exception as e:
+        print(f"Error sanitizing logo: {e}")
+        # If sanitization fails, raise an exception
+        raise Exception(f"Failed to process logo. It may be corrupted or in an unsupported format. Error: {e}")
 
 # ===============================================================
-# PART 1: THE "GENERATOR ENGINE"
-# All the logic for building the documents
+# 4️⃣ The "Engine" (Document Generators)
+#
+# This is the full, un-redacted code for all generators.
 # ===============================================================
 
-# --- Utility Functions (Helpers) ---
+# --- 4.1: Utility Functions ---
 
 def add_footer(doc, text):
     """Adds a tagline to the footer of every page."""
@@ -39,11 +74,6 @@ def add_logo(doc, logo_path):
     """Adds the brand logo to the top of the document."""
     try:
         if logo_path and os.path.exists(logo_path):
-            # Try to open the image to check if it's valid and get dimensions
-            with PILImage.open(logo_path) as img:
-                pass # If this passes, the image is likely valid
-            
-            # Add the picture, scaling to 1.3 inches wide
             doc.add_picture(logo_path, width=Inches(1.3))
     except Exception as e:
         print(f"⚠️ Logo add failed (is {logo_path} a valid image?): {e}")
@@ -74,7 +104,7 @@ def add_table_row(table, texts):
         row[i].text = text
     return row
 
-# --- Core Generator Functions ---
+# --- 4.2: Hiring Kit Generator ---
 
 def make_hiring_kit(COMPANY_DETAILS, BRAND_TAGLINE, logo_path, save_folder):
     """Generates all 6 documents for the Hiring & Onboarding Kit."""
@@ -254,7 +284,8 @@ def make_hiring_kit(COMPANY_DETAILS, BRAND_TAGLINE, logo_path, save_folder):
     add_footer(doc, BRAND_TAGLINE); doc.save(os.path.join(save_folder, "06_New_Hire_Onboarding_Checklist.docx"))
     
     print("...Hiring Kit DONE.")
-    return True # Indicate success
+
+# --- 4.3: Handbook Generator ---
 
 def make_handbook(COMPANY_DETAILS, BRAND_TAGLINE, logo_path, save_folder):
     """Generates the complete Employee Handbook."""
@@ -478,7 +509,8 @@ def make_handbook(COMPANY_DETAILS, BRAND_TAGLINE, logo_path, save_folder):
     add_footer(doc, BRAND_TAGLINE)
     doc.save(os.path.join(save_folder, "01_Employee_Handbook_Template.docx"))
     print("...Employee Handbook DONE.")
-    return True # Indicate success
+
+# --- 4.4: Performance Kit Generator ---
 
 def make_performance(COMPANY_DETAILS, BRAND_TAGLINE, logo_path, save_folder):
     """Generates all 5 documents for the Performance Management Toolkit."""
@@ -604,7 +636,8 @@ def make_performance(COMPANY_DETAILS, BRAND_TAGLINE, logo_path, save_folder):
     doc.add_paragraph("\n\n___________________\nTandatangan / Signature:\nNama / Name:\nTarikh / Date:")
     add_footer(doc, BRAND_TAGLINE); doc.save(os.path.join(save_folder, "05_Performance_Improvement_Plan_Template.docx"))
     print("...Performance Toolkit DONE.")
-    return True # Indicate success
+
+# --- 4.5: Documentation Generator ---
 
 def make_documentation(COMPANY_DETAILS, BRAND_TAGLINE, logo_path, save_folder):
     """Generates the User Guide PDF and the README.txt file."""
@@ -616,9 +649,12 @@ def make_documentation(COMPANY_DETAILS, BRAND_TAGLINE, logo_path, save_folder):
     story = []
     try:
         if logo_path and os.path.exists(logo_path):
+            # Use the sanitized logo path
             story.append(Image(logo_path, width=Inches(1), height=Inches(1)))
     except Exception as e:
         print(f"⚠️ PDF Logo add failed: {e}")
+        # This error is now critical, as a bad logo would have been caught by the sanitizer
+        # But we can still proceed without it.
         
     story += [
         Spacer(1, 12),
@@ -638,7 +674,13 @@ def make_documentation(COMPANY_DETAILS, BRAND_TAGLINE, logo_path, save_folder):
         Spacer(1, 12),
         Paragraph("<i>Disclaimer: These templates are not legal advice. Always consult a qualified legal or HR professional before implementation.</i>", styles['Italic']),
     ]
-    SimpleDocTemplate(guide_pdf).build(story)
+    
+    try:
+        SimpleDocTemplate(guide_pdf).build(story)
+    except Exception as e:
+        print(f"CRITICAL ERROR: PDF generation failed: {e}")
+        # This could happen if the logo is *still* bad, though unlikely
+        raise Exception(f"PDF generation failed. Logo may be invalid. Error: {e}")
 
     # === README.txt ===
     readme_content = f"""{COMPANY_DETAILS['name']}
@@ -669,7 +711,7 @@ We hope this pack helps you build a great, productive, and compliant workplace.
 Terima kasih kerana memilih pek templat ini. Sumber ini direka untuk menyediakan PKS (Perusahaan Kecil dan Sederhana) Malaysia dengan satu set dokumen HR yang praktikal, patuh undang-undang, dan profesional.
 
 [PENTING: BACA DAHULU]
-Dokumen ini hanyalah templat dan bukan nasihat undang-undang. Dokumen-dokumen ini disediakan berdasarkan prinsip Akta Kerja 1955 (termasuk pindaan 2023), Akta Perhubungan Perusahaan 1967, dan amalan terbaik HR semasa.
+Dokumen ini hanyalah templat dan bukan nasihat undang-undang. Dokumen-dokumen ini disediakan berdasarkan prinsip Akta Kerja 1955 (termasuk pindaan 2023), Akta Perhubungan Perusahaan 1967, and amalan terbaik HR semasa.
 
 Persekitaran undang-undang adalah rumit; templat ini adalah titik permulaan, bukan penyelesaian muktamad.
 
@@ -683,32 +725,19 @@ Kami berharap pek ini membantu anda membina tempat kerja yang hebat, produktif, 
     with open(os.path.join(save_folder, "README.txt"),"w",encoding="utf-8") as f:
         f.write(readme_content)
     print("...Documentation DONE.")
-    return True # Indicate success
 
 
-# --- Master Function (Called by the API) ---
+# ===============================================================
+# 5️⃣ The Master Function (This is what the API calls)
+#
+# UPDATED: Now calls sanitize_logo()
+# ===============================================================
 
-def generate_hr_pack(
-    company_name, 
-    company_address, 
-    working_hours, 
-    dress_code, 
-    ceo_name, 
-    ceo_title, 
-    hr_name, 
-    hr_title, 
-    brand_tagline, 
-    logo_path  # Note: This is now just a string path
-):
-    """
-    Main function to generate the complete HR pack.
-    It creates a temporary directory, builds all files,
-    zips them, and returns the zip file's path and name.
-    """
+def generate_hr_pack(COMPANY_DETAILS, BRAND_TAGLINE, logo_upload_file):
     
-    print(f"Starting pack generation for: {company_name}")
+    print(f"Starting pack generation for: {COMPANY_DETAILS['name']}")
     
-    # 1. Create a temporary, unique directory to build the pack
+    # --- 1. Create a temporary, unique directory to build the pack
     base_dir = tempfile.mkdtemp()
     
     # Define all the folder paths
@@ -722,151 +751,124 @@ def generate_hr_pack(
     for f in [kit_folder, handbook_folder, performance_folder, doc_folder]:
         os.makedirs(f, exist_ok=True)
 
-    # 2. Consolidate all company data into one dictionary
-    COMPANY_DETAILS = {
-        "name": company_name,
-        "address": company_address,
-        "working_hours": working_hours,
-        "dress_code": dress_code,
-        "ceo_name": ceo_name,
-        "ceo_title": ceo_title,
-        "hr_name": hr_name,
-        "hr_title": hr_title
-    }
+    # --- 2. Process and Sanitize the uploaded logo
+    sanitized_logo_path = None
+    if logo_upload_file:
+        print(f"Sanitizing logo: {logo_upload_file.filename}")
+        sanitized_logo_path = sanitize_logo(logo_upload_file, base_dir)
+        # Note: sanitize_logo will raise an exception if it fails
 
-    # 3. Run all the generator functions
-    # We pass the logo_path string (which can be None) directly
-    make_hiring_kit(COMPANY_DETAILS, brand_tagline, logo_path, kit_folder)
-    make_handbook(COMPANY_DETAILS, brand_tagline, logo_path, handbook_folder)
-    make_performance(COMPANY_DETAILS, brand_tagline, logo_path, performance_folder)
-    make_documentation(COMPANY_DETAILS, brand_tagline, logo_path, doc_folder)
+    # --- 3. Run all the generator functions
+    # All functions now receive the path to the NEW sanitized logo
+    try:
+        make_hiring_kit(COMPANY_DETAILS, BRAND_TAGLINE, sanitized_logo_path, kit_folder)
+        make_handbook(COMPANY_DETAILS, BRAND_TAGLINE, sanitized_logo_path, handbook_folder)
+        make_performance(COMPANY_DETAILS, BRAND_TAGLINE, sanitized_logo_path, performance_folder)
+        make_documentation(COMPANY_DETAILS, BRAND_TAGLINE, sanitized_logo_path, doc_folder)
+    except Exception as e:
+        # Clean up the temp folder on error
+        shutil.rmtree(base_dir)
+        # Re-raise the exception to be caught by the API
+        raise e
 
-    # 4. Zip the entire generated folder
+    # --- 4. Zip the entire generated folder
     print("Zipping the final pack...")
-    # Create a safe filename (e.g., "Addin_Resources_Sdn_Bhd_HR_Pack.zip")
-    safe_company_name = "".join(c for c in company_name if c.isalnum() or c in (' ', '_')).rstrip().replace(" ", "_")
-    zip_filename = f"{safe_company_name}_HR_Pack.zip"
+    safe_company_name = "".join(c for c in COMPANY_DETAILS['name'] if c.isalnum() or c in (' ', '_')).rstrip().replace(" ", "_")
+    zip_filename = f"{safe_company_name}_HR_People_Management_Pack.zip"
     
-    # Create the zip file in a temporary location
-    zip_output_path = os.path.join(tempfile.gettempdir(), zip_filename)
+    # We create the zip file in a place that's safe to clean up
+    zip_output_path = os.path.join(base_dir, zip_filename)
 
     # Create the zip
     shutil.make_archive(
-        base_name=zip_output_path.replace('.zip', ''), 
-        format='zip', 
-        root_dir=base_dir, 
+        base_name=os.path.join(base_dir, "HR_Pack_Final"), # A temporary base name
+        format='zip',
+        root_dir=base_dir,
         base_dir="HR_People_Management_Pack"
     )
+    
+    # Define the *final* zip file path
+    final_zip_file = os.path.join(base_dir, "HR_Pack_Final.zip")
 
-    # 5. Clean up the build directory
-    shutil.rmtree(base_dir)
-    print(f"Pack generated. Returning zip file: {zip_output_path}")
+    print(f"Pack generated. Returning zip file: {final_zip_file}")
 
-    # 6. Return the path and filename of the zip file
-    return zip_output_path, zip_filename
+    # --- 6. Return the path to the zip file and its name
+    # We can't clean up base_dir yet, because the zip file is in it.
+    # The 'finally' block in the API route will handle cleanup.
+    return final_zip_file, zip_filename, base_dir
 
 
 # ===============================================================
-# PART 2: THE "WEB API"
-# This is the Flask server that listens for requests
-# from your index.html
+# 6️⃣ The API Endpoint (The "Door")
+#
+# UPDATED: Now gets the logo file from 'request.files'
 # ===============================================================
 
-# --- 1. Initialize the Flask App ---
-app = Flask(__name__)
-
-# --- 2. Enable CORS ---
-# This allows your Netlify frontend to talk to your Render backend
-CORS(app)
-
-# --- 3. Define a simple "health check" endpoint ---
-@app.route('/')
-def home():
-    # This is just to check if the server is running
-    return "HR Pack Generator API is live."
-
-# --- 4. Define the API Endpoint ---
 @app.route('/generate-pack', methods=['POST'])
 def handle_generation():
     
-    # 5. Get Data from the HTML Form
-    try:
-        company_name = request.form['company_name']
-        company_address = request.form['company_address']
-        working_hours = request.form['working_hours']
-        dress_code = request.form['dress_code']
-        ceo_name = request.form['ceo_name']
-        ceo_title = request.form['ceo_title']
-        hr_name = request.form['hr_name']
-        hr_title = request.form['hr_title']
-        brand_tagline = request.form['brand_tagline']
-        logo_upload = request.files.get('logo_upload')
-    except Exception as e:
-        print(f"[ERROR] Form data error: {e}")
-        return jsonify({"error": f"Missing form data: {e}"}), 400
-
+    zip_path_to_send = None
+    base_dir_to_clean = None
     
-    temp_logo_path = None
-    temp_dir = tempfile.mkdtemp() # Create a temp dir for all our work
-
     try:
-        # 6. Save the uploaded logo to a temporary file
-        if logo_upload and logo_upload.filename != '':
-            # Sanitize filename just in case
-            safe_filename = "".join(c for c in logo_upload.filename if c.isalnum() or c in ('.', '_', '-')).rstrip()
-            temp_logo_path = os.path.join(temp_dir, safe_filename)
-            logo_upload.save(temp_logo_path)
-            print(f"Logo saved to {temp_logo_path}")
+        # --- 1. Get data from the form ---
         
-        # 7. Call the Generator Engine
-        zip_output_path, zip_filename = generate_hr_pack(
-            company_name, 
-            company_address, 
-            working_hours, 
-            dress_code, 
-            ceo_name, 
-            ceo_title, 
-            hr_name, 
-            hr_title, 
-            brand_tagline, 
-            temp_logo_path # Pass the path (string) to the saved logo
+        # Get text data
+        data = request.form
+        COMPANY_DETAILS = {
+            "name": data.get('company_name'),
+            "address": data.get('company_address'),
+            "working_hours": data.get('working_hours'),
+            "dress_code": data.get('dress_code'),
+            "ceo_name": data.get('ceo_name'),
+            "ceo_title": data.get('ceo_title'),
+            "hr_name": data.get('hr_name'),
+            "hr_title": data.get('hr_title')
+        }
+        BRAND_TAGLINE = data.get('brand_tagline')
+        
+        # Get file data
+        logo_upload_file = request.files.get('logo_upload')
+        
+        # Basic validation
+        if not COMPANY_DETAILS['name']:
+            raise Exception("Company Name is a required field.")
+
+        # --- 2. Run the master generator function ---
+        zip_path_to_send, zip_filename, base_dir_to_clean = generate_hr_pack(
+            COMPANY_DETAILS, 
+            BRAND_TAGLINE, 
+            logo_upload_file
         )
-    
-    except Exception as e:
-        print(f"[ERROR] Generator error: {e}")
-        # Clean up the temp dir before erroring
-        if os.path.exists(temp_dir):
-            shutil.rmtree(temp_dir)
-        return jsonify({"error": f"Failed to generate documents. Please check logo format. Error: {e}"}), 500
-    
-    # 8. Send the .zip File to the Browser
-    print(f"Sending file: {zip_output_path}")
-    try:
-        response = send_file(
-            zip_output_path,
+
+        # --- 3. Send the .zip file back to the user ---
+        return send_file(
+            zip_path_to_send,
             as_attachment=True,
-            download_name=zip_filename
+            download_name=zip_filename,
+            mimetype='application/zip'
         )
-        return response
-        
+
     except Exception as e:
-        print(f"[ERROR] File sending error: {e}")
-        return jsonify({"error": f"Failed to send file: {e}"}), 500
-
+        print(f"--- ERROR: {e} ---")
+        # Send a JSON error back to the frontend
+        return jsonify(error=f"An error occurred. {e}"), 500
+    
     finally:
-        # 9. Clean up all temporary files
-        try:
-            if os.path.exists(temp_dir):
-                shutil.rmtree(temp_dir) # Clean up the logo temp dir
-            if os.path.exists(zip_output_path):
-                os.remove(zip_output_path) # Clean up the zip file
-            print("Temporary files cleaned up.")
-        except Exception as e:
-            print(f"Warning: Error cleaning up temp files: {e}")
+        # --- 4. Clean up the temporary directory ---
+        # This block runs *after* the file is sent (or if an error occurs)
+        if base_dir_to_clean and os.path.exists(base_dir_to_clean):
+            try:
+                shutil.rmtree(base_dir_to_clean)
+                print(f"Successfully cleaned up temp directory: {base_dir_to_clean}")
+            except Exception as e:
+                print(f"Warning: Failed to clean up temp directory {base_dir_to_clean}. Error: {e}")
 
+# Homepage Route (for testing)
+@app.route('/')
+def index():
+    return jsonify(message="HR Pack Generator API is live and running."), 200
 
-# This is for local testing. Render will use Gunicorn (see requirements.txt)
-if __name__ == '__main__':
-    # Runs a simple server for local testing
-    # DO NOT use this in production
+# --- 7. Run the App ---
+if __name__ == "__main__":
     app.run(debug=True, port=5000)
