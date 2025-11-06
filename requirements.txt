@@ -1,0 +1,1 @@
+Libraries required for the generatorpython-docxreportlabpillowLibrary required for download_logo.pyrequestsLibraries required for the REAL app.py (not this test)We include them here so your environment is ready.Flaskflask-corsgunicorn
