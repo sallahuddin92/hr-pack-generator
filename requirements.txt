@@ -1,5 +1,1 @@
-Flaskflask-cors
-gunicorn
-python-docx
-reportlab
-pillow
+Flaskflask-corsgunicornpython-docxreportlabpillow
