@@ -92,7 +92,7 @@ def add_logo(doc, logo_path):
         if logo_path and os.path.exists(logo_path):
             doc.add_picture(logo_path, width=Inches(1.3))
     except Exception as e:
-        print(f"⚠️ Logo add failed (is {logo_path} a valid image?): {e}")
+        print(f"⚠️ Docx Logo add failed (is {logo_path} a valid image?): {e}")
         # Don't stop the whole process, just skip the logo
 
 def add_bilingual_disclaimer(doc, en_text, bm_text):
@@ -527,8 +527,6 @@ def make_handbook(COMPANY_DETAILS, BRAND_TAGLINE, logo_path, save_folder):
     print("...Employee Handbook DONE.")
     return True # Indicate success
 
-# --- 4.4: Performance Kit Generator ---
-
 def make_performance(COMPANY_DETAILS, BRAND_TAGLINE, logo_path, save_folder):
     """Generates all 5 documents for the Performance Management Toolkit."""
     print("Generating Performance Toolkit...")
@@ -653,8 +651,7 @@ def make_performance(COMPANY_DETAILS, BRAND_TAGLINE, logo_path, save_folder):
     doc.add_paragraph("\n\n___________________\nTandatangan / Signature:\nNama / Name:\nTarikh / Date:")
     add_footer(doc, BRAND_TAGLINE); doc.save(os.path.join(save_folder, "05_Performance_Improvement_Plan_Template.docx"))
     print("...Performance Toolkit DONE.")
-
-# --- 4.5: Documentation Generator ---
+    return True # Indicate success
 
 def make_documentation(COMPANY_DETAILS, BRAND_TAGLINE, logo_path, save_folder):
     """Generates the User Guide PDF and the README.txt file."""
@@ -742,6 +739,7 @@ Kami berharap pek ini membantu anda membina tempat kerja yang hebat, produktif, 
     with open(os.path.join(save_folder, "README.txt"),"w",encoding="utf-8") as f:
         f.write(readme_content)
     print("...Documentation DONE.")
+    return True # Indicate success
 
 
 # ===============================================================
