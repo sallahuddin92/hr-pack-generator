@@ -1,7 +1,8 @@
 # ===================================================================
 # 🇲🇾 HR Pack Generator - BACKEND API (All-in-One)
 #
-# VERSION 2: Includes logo sanitization to fix large image errors.
+# VERSION 3: Upgraded logo sanitization to strip bad metadata (DPI)
+#          and improved temp file cleanup.
 # ===================================================================
 
 import os
@@ -23,11 +24,12 @@ app = Flask(__name__)
 # --- 2. Enable CORS ---
 CORS(app)
 
-# --- 3. HELPER: Logo Sanitizer ---
-# This function fixes logos that are "too large" or have bad metadata
+# --- 3. UPGRADED HELPER: Logo Sanitizer ---
+# This function fixes logos that are "too large" or have bad metadata/DPI
 def sanitize_logo(logo_upload_file, base_dir):
     """
-    Opens, resizes, and saves the logo to a clean format.
+    Opens, rebuilds, and saves the logo to a clean format,
+    stripping all corrupted or problematic metadata.
     Returns the path to the new, sanitized logo.
     """
     try:
@@ -36,18 +38,32 @@ def sanitize_logo(logo_upload_file, base_dir):
         logo_upload_file.save(temp_logo_path)
         
         # Open with Pillow
-        image = PILImage.open(temp_logo_path)
-        
-        # Resize to a max width/height of 500px, keeping aspect ratio
-        image.thumbnail((500, 500))
-        
-        # Save as a new, clean PNG
-        sanitized_logo_path = os.path.join(base_dir, "logo_sanitized.png")
-        image.save(sanitized_logo_path, "PNG")
+        with PILImage.open(temp_logo_path) as image:
+            # Convert to RGBA for consistent handling
+            # This is a key step to ensure we can create a clean mask
+            image = image.convert("RGBA")
+            
+            # Resize to a max width/height of 500px, keeping aspect ratio
+            image.thumbnail((500, 500))
+            
+            # --- The "Rebuild" Process ---
+            # 1. Create a new, blank canvas with a transparent background
+            #    Use the thumbnail's *actual* new size
+            new_canvas = PILImage.new("RGBA", image.size, (255, 255, 255, 0))
+            
+            # 2. Paste the resized image onto the blank canvas.
+            #    We use the image's alpha channel (its own transparency) as the mask.
+            #    This rebuilds the image from scratch and strips all bad metadata/DPI.
+            new_canvas.paste(image, (0, 0), image)
+            
+            # 3. Save the *new canvas* as our clean file
+            sanitized_logo_path = os.path.join(base_dir, "logo_sanitized.png")
+            new_canvas.save(sanitized_logo_path, "PNG")
         
         # Clean up the original temp file
         os.remove(temp_logo_path)
         
+        print("Logo successfully sanitized and rebuilt.")
         return sanitized_logo_path
         
     except Exception as e:
@@ -367,7 +383,7 @@ def make_handbook(COMPANY_DETAILS, BRAND_TAGLINE, logo_path, save_folder):
     doc.add_heading("2.3 Sulit & Data Peribadi / Confidentiality & Personal Data", level=2)
     add_bilingual_block(doc,
         "During your employment, you will have access to confidential information. You must not disclose this information to any third party, during or after your employment. The Company respects your personal data in accordance with the Personal Data Protection Act 2010 (PDPA).",
-        "Sepanjang perkhidmatan anda, anda akan mempunyai akses kepada maklumat sulit. Anda tidak boleh mendedahkan maklumat ini kepada mana-mana pihak ketiga, semasa atau selepas perkhidmatan anda. Syarikat menghormati data peribadi anda selaras dengan Akta Perlindungan Data Peribadi 2010 (PDPA)."
+        "Sepangang perkhidmatan anda, anda akan mempunyai akses kepada maklumat sulit. Anda tidak boleh mendedahkan maklumat ini kepada mana-mana pihak ketiga, semasa atau selepas perkhidmatan anda. Syarikat menghormati data peribadi anda selaras dengan Akta Perlindungan Data Peribadi 2010 (PDPA)."
     )
     doc.add_heading("2.4 Susunan Kerja Fleksibel (FWA) / Flexible Work Arrangements", level=2)
     add_bilingual_block(doc,
@@ -509,6 +525,7 @@ def make_handbook(COMPANY_DETAILS, BRAND_TAGLINE, logo_path, save_folder):
     add_footer(doc, BRAND_TAGLINE)
     doc.save(os.path.join(save_folder, "01_Employee_Handbook_Template.docx"))
     print("...Employee Handbook DONE.")
+    return True # Indicate success
 
 # --- 4.4: Performance Kit Generator ---
 
