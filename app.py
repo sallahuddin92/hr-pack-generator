@@ -300,8 +300,7 @@ def make_hiring_kit(COMPANY_DETAILS, BRAND_TAGLINE, logo_path, save_folder):
     add_footer(doc, BRAND_TAGLINE); doc.save(os.path.join(save_folder, "06_New_Hire_Onboarding_Checklist.docx"))
     
     print("...Hiring Kit DONE.")
-
-# --- 4.3: Handbook Generator ---
+    return True # Indicate success
 
 def make_handbook(COMPANY_DETAILS, BRAND_TAGLINE, logo_path, save_folder):
     """Generates the complete Employee Handbook."""
@@ -383,7 +382,7 @@ def make_handbook(COMPANY_DETAILS, BRAND_TAGLINE, logo_path, save_folder):
     doc.add_heading("2.3 Sulit & Data Peribadi / Confidentiality & Personal Data", level=2)
     add_bilingual_block(doc,
         "During your employment, you will have access to confidential information. You must not disclose this information to any third party, during or after your employment. The Company respects your personal data in accordance with the Personal Data Protection Act 2010 (PDPA).",
-        "Sepangang perkhidmatan anda, anda akan mempunyai akses kepada maklumat sulit. Anda tidak boleh mendedahkan maklumat ini kepada mana-mana pihak ketiga, semasa atau selepas perkhidmatan anda. Syarikat menghormati data peribadi anda selaras dengan Akta Perlindungan Data Peribadi 2010 (PDPA)."
+        "Sepanjang perkhidmatan anda, anda akan mempunyai akses kepada maklumat sulit. Anda tidak boleh mendedahkan maklumat ini kepada mana-mana pihak ketiga, semasa atau selepas perkhidmatan anda. Syarikat menghormati data peribadi anda selaras dengan Akta Perlindungan Data Peribadi 2010 (PDPA)."
     )
     doc.add_heading("2.4 Susunan Kerja Fleksibel (FWA) / Flexible Work Arrangements", level=2)
     add_bilingual_block(doc,
