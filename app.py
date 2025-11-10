@@ -1,8 +1,8 @@
 # ===================================================================
 # 🇲🇾 HR Pack Generator - BACKEND API (All-in-One)
 #
-# VERSION 3: Upgraded logo sanitization to strip bad metadata (DPI)
-#          and improved temp file cleanup.
+# VERSION 4: Includes user's fix for reportlab Image size
+#          by explicitly setting width/height in inches.
 # ===================================================================
 
 import os
@@ -16,7 +16,8 @@ from docx.shared import Inches, Pt
 from docx.oxml import OxmlElement
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image
 from reportlab.lib.styles import getSampleStyleSheet
-from PIL import Image as PILImage # <-- Import PIL's Image
+from reportlab.lib.units import inch # <-- IMPORTING 'inch' AS YOU REQUESTED
+from PIL import Image as PILImage 
 
 # --- 1. Initialize the Flask App ---
 app = Flask(__name__)
@@ -24,7 +25,7 @@ app = Flask(__name__)
 # --- 2. Enable CORS ---
 CORS(app)
 
-# --- 3. UPGRADED HELPER: Logo Sanitizer ---
+# --- 3. UPGRADED HELPER: Logo Sanitizer (V3) ---
 # This function fixes logos that are "too large" or have bad metadata/DPI
 def sanitize_logo(logo_upload_file, base_dir):
     """
@@ -301,6 +302,8 @@ def make_hiring_kit(COMPANY_DETAILS, BRAND_TAGLINE, logo_path, save_folder):
     
     print("...Hiring Kit DONE.")
     return True # Indicate success
+
+# --- 4.3: Handbook Generator ---
 
 def make_handbook(COMPANY_DETAILS, BRAND_TAGLINE, logo_path, save_folder):
     """Generates the complete Employee Handbook."""
@@ -652,6 +655,8 @@ def make_performance(COMPANY_DETAILS, BRAND_TAGLINE, logo_path, save_folder):
     print("...Performance Toolkit DONE.")
     return True # Indicate success
 
+# --- 4.5: Documentation Generator ---
+
 def make_documentation(COMPANY_DETAILS, BRAND_TAGLINE, logo_path, save_folder):
     """Generates the User Guide PDF and the README.txt file."""
     print("Generating Documentation...")
@@ -663,7 +668,8 @@ def make_documentation(COMPANY_DETAILS, BRAND_TAGLINE, logo_path, save_folder):
     try:
         if logo_path and os.path.exists(logo_path):
             # Use the sanitized logo path
-            story.append(Image(logo_path, width=Inches(1), height=Inches(1)))
+            # UPDATED with your fix:
+            story.append(Image(logo_path, width=1.3*inch, height=1.3*inch))
     except Exception as e:
         print(f"⚠️ PDF Logo add failed: {e}")
         # This error is now critical, as a bad logo would have been caught by the sanitizer
