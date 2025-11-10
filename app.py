@@ -1,8 +1,10 @@
 # ===================================================================
 # 🇲🇾 HR Pack Generator - BACKEND API (All-in-One)
 #
-# VERSION 4: Includes user's fix for reportlab Image size
-#          by explicitly setting width/height in inches.
+# VERSION 4: Final Production Build
+# - Upgraded logo sanitization to strip bad metadata (DPI).
+# - Added explicit width/height in inches for PDF logo.
+# - Improved temp file cleanup.
 # ===================================================================
 
 import os
@@ -16,7 +18,7 @@ from docx.shared import Inches, Pt
 from docx.oxml import OxmlElement
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image
 from reportlab.lib.styles import getSampleStyleSheet
-from reportlab.lib.units import inch # <-- IMPORTING 'inch' AS YOU REQUESTED
+from reportlab.lib.units import inch # <-- IMPORTING 'inch'
 from PIL import Image as PILImage 
 
 # --- 1. Initialize the Flask App ---
@@ -25,7 +27,7 @@ app = Flask(__name__)
 # --- 2. Enable CORS ---
 CORS(app)
 
-# --- 3. UPGRADED HELPER: Logo Sanitizer (V3) ---
+# --- 3. UPGRADED HELPER: Logo Sanitizer (V4) ---
 # This function fixes logos that are "too large" or have bad metadata/DPI
 def sanitize_logo(logo_upload_file, base_dir):
     """
@@ -139,7 +141,7 @@ def make_hiring_kit(COMPANY_DETAILS, BRAND_TAGLINE, logo_path, save_folder):
     doc.add_paragraph(); doc.add_heading("TUJUAN JAWATAN / JOB PURPOSE", 1)
     add_bilingual_block(doc,
         f"(A brief 1-2 sentence summary of the main purpose of this role and why it exists.)\nExample: To manage all digital marketing channels for {COMPANY_DETAILS['name']}, including social media, email marketing, and SEO, to generate leads and build brand awareness.",
-        f"(Ringkasan 1-2 ayat tentang tujuan utama peranan ini dan mengapa ia wujud.)\nContoh: Mengurus semua saluran pemasaran digital untuk {COMPANY_DETAILS['name']}, termasuk media sosial, pemasaran e-mel, dan SEO, untuk menjana petunjuk jualan (leads) dan membina kesedaran jenama."
+        f"(Ringkasan 1-2 ayat tentang tujuan utama peranan ini dan mengapa ia wujud.)\nContoh: Mengurus semua saluran pemasaran digital untuk {COMPANY_DETAILS['name']}, including social media, pemasaran e-mel, dan SEO, untuk menjana petunjuk jualan (leads) dan membina kesedaran jenama."
     )
     doc.add_heading("TANGGUNGJAWAB UTAMA / KEY RESPONSIBILITIES", 1)
     doc.add_paragraph("(Sila senaraikan 5-8 tanggungjawab utama. / Please list 5-8 primary responsibilities.)")
@@ -668,12 +670,12 @@ def make_documentation(COMPANY_DETAILS, BRAND_TAGLINE, logo_path, save_folder):
     try:
         if logo_path and os.path.exists(logo_path):
             # Use the sanitized logo path
-            # UPDATED with your fix:
+            # === YOUR FIX IS APPLIED HERE ===
             story.append(Image(logo_path, width=1.3*inch, height=1.3*inch))
     except Exception as e:
         print(f"⚠️ PDF Logo add failed: {e}")
-        # This error is now critical, as a bad logo would have been caught by the sanitizer
-        # But we can still proceed without it.
+        # If the logo *still* fails (highly unlikely), we raise the error.
+        raise Exception(f"PDF generation failed. Logo may be invalid. Error: {e}")
         
     story += [
         Spacer(1, 12),
@@ -698,7 +700,7 @@ def make_documentation(COMPANY_DETAILS, BRAND_TAGLINE, logo_path, save_folder):
         SimpleDocTemplate(guide_pdf).build(story)
     except Exception as e:
         print(f"CRITICAL ERROR: PDF generation failed: {e}")
-        # This could happen if the logo is *still* bad, though unlikely
+        # This is the error that was happening, now it will be caught.
         raise Exception(f"PDF generation failed. Logo may be invalid. Error: {e}")
 
     # === README.txt ===
@@ -749,8 +751,6 @@ Kami berharap pek ini membantu anda membina tempat kerja yang hebat, produktif, 
 
 # ===============================================================
 # 5️⃣ The Master Function (This is what the API calls)
-#
-# UPDATED: Now calls sanitize_logo()
 # ===============================================================
 
 def generate_hr_pack(COMPANY_DETAILS, BRAND_TAGLINE, logo_upload_file):
@@ -773,7 +773,7 @@ def generate_hr_pack(COMPANY_DETAILS, BRAND_TAGLINE, logo_upload_file):
 
     # --- 2. Process and Sanitize the uploaded logo
     sanitized_logo_path = None
-    if logo_upload_file:
+    if logo_upload_file and logo_upload_file.filename != '':
         print(f"Sanitizing logo: {logo_upload_file.filename}")
         sanitized_logo_path = sanitize_logo(logo_upload_file, base_dir)
         # Note: sanitize_logo will raise an exception if it fails
@@ -797,31 +797,27 @@ def generate_hr_pack(COMPANY_DETAILS, BRAND_TAGLINE, logo_upload_file):
     zip_filename = f"{safe_company_name}_HR_People_Management_Pack.zip"
     
     # We create the zip file in a place that's safe to clean up
+    # Note: We create it *outside* the 'HR_People_Management_Pack' folder
     zip_output_path = os.path.join(base_dir, zip_filename)
 
     # Create the zip
     shutil.make_archive(
-        base_name=os.path.join(base_dir, "HR_Pack_Final"), # A temporary base name
+        base_name=zip_output_path.replace('.zip', ''), # Path to create zip *without* extension
         format='zip',
-        root_dir=base_dir,
-        base_dir="HR_People_Management_Pack"
+        root_dir=base_dir, # Start zipping from here
+        base_dir="HR_People_Management_Pack" # Zip this folder
     )
     
-    # Define the *final* zip file path
-    final_zip_file = os.path.join(base_dir, "HR_Pack_Final.zip")
-
-    print(f"Pack generated. Returning zip file: {final_zip_file}")
+    print(f"Pack generated. Returning zip file: {zip_output_path}")
 
     # --- 6. Return the path to the zip file and its name
     # We can't clean up base_dir yet, because the zip file is in it.
     # The 'finally' block in the API route will handle cleanup.
-    return final_zip_file, zip_filename, base_dir
+    return zip_output_path, zip_filename, base_dir
 
 
 # ===============================================================
 # 6️⃣ The API Endpoint (The "Door")
-#
-# UPDATED: Now gets the logo file from 'request.files'
 # ===============================================================
 
 @app.route('/generate-pack', methods=['POST'])
